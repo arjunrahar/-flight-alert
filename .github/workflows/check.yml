@@ -1,0 +1,45 @@
+name: Flight price check
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"      # every 6 hours (UTC). Free on GitHub.
+  workflow_dispatch:            # lets you press "Run workflow" to test
+
+permissions:
+  contents: write               # so the job can commit state.json / history.csv
+
+concurrency:
+  group: price-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Check prices
+        env:
+          ORIGIN: ${{ vars.ORIGIN || 'ATL' }}
+          DEST: ${{ vars.DEST || 'DEL' }}
+          START_DATE: ${{ vars.START_DATE || '2026-11-20' }}
+          END_DATE: ${{ vars.END_DATE || '2026-12-30' }}
+          THRESHOLD_USD: ${{ vars.THRESHOLD_USD || '550' }}
+          TRIP: ${{ vars.TRIP || 'one-way' }}
+          MAX_STOPS: ${{ vars.MAX_STOPS }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+        run: python check_prices.py
+      - name: Save state back to repo
+        run: |
+          git config user.name "price-bot"
+          git config user.email "price-bot@users.noreply.github.com"
+          git add state.json history.csv
+          git diff --cached --quiet || git commit -m "price check $(date -u +%F_%H:%M)"
+          git push

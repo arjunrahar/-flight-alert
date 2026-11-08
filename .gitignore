@@ -1,0 +1,4 @@
+.env
+last_run.log
+__pycache__/
+full_run.log
